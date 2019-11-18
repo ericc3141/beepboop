@@ -1,5 +1,7 @@
 #include "SR04.h"
 #include<Wire.h>
+#include <ros.h>
+#include <std_msgs/Empty.h>
 
 typedef enum {LF_L_I = A0, 
  LF_R_I = A1,
@@ -24,7 +26,8 @@ typedef enum{EN_A = 4,
  typedef enum{
   starting_state,
   default_state,
-  stopping_state
+  finished_state,
+  forced_stopped_state
  }states_t;
 
 
@@ -97,13 +100,26 @@ void doTurn(){
   
 }
 
+ros::NodeHandle nh;
+void messageCb( const std_msgs::Empty& toggle_msg){
+  state = forced_stopped_state;
+} 
+ros::Subscriber<std_msgs::Empty> sub("toggle_led", &messageCb );
+ 
+
 
 void setup() {
    Serial.begin(9600);
    state = starting_state;
+   nh.initNode();
+   nh.subscribe(sub);
 }
 
 void loop() {
+ nh.spinOnce();
+ if (state == forced_stopped_state){
+  Serial.print("hello");
+ }
  if (state == starting_state){
     if (digitalRead(start_button) == HIGH){
     delay(3000);
@@ -124,7 +140,7 @@ void loop() {
   
     else if (spotDetected() && lineFollowed){
       driveForwardandStop();
-      state = stopping_state;
+      state = finished_state;
     }
   
     else{
