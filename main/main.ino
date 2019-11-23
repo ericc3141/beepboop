@@ -4,7 +4,9 @@
 #include "sensors.h"
 #include "actuators.h"
 
-typedef enum{
+const float ULTRA_THRESH = 6;
+
+ typedef enum{
   starting_state,
   default_state,
   finished_state,
@@ -17,6 +19,13 @@ typedef struct {
   } ultra;
 } sensors_t;
 sensors_t sense = {};
+
+typedef struct {
+  struct {
+    motor_t left, right;
+  } motor;
+} actuators_t;
+actuators_t act = {};
 
 bool lineFollowed = false;
 int state;
@@ -41,6 +50,16 @@ void setup() {
    //nh.subscribe(sub);
    sense.ultra.left = ultra_setup(13, 12);
    sense.ultra.right = ultra_setup(11, 10);
+
+   act.motor.left = motor_setup(7, 3, 4);
+   act.motor.right = motor_setup(7, 6, 5);
+}
+
+void drive(int power) {
+  Serial.print("drive\t");
+  Serial.println(power);
+  motor_drive(act.motor.left, power);
+  motor_drive(act.motor.right, power);
 }
 
 void loop() {
@@ -48,10 +67,11 @@ void loop() {
  ultra_read(sense.ultra.left);
  ultra_read(sense.ultra.right);
 
- Serial.print("left\t");
- Serial.println(sense.ultra.left.dist);
- Serial.print("right\t");
- Serial.println(sense.ultra.right.dist);
+ if (sense.ultra.left.dist > ULTRA_THRESH || sense.ultra.right.dist > ULTRA_THRESH) {
+  drive(0);
+ } else {
+  drive(80);
+ }
  
  if (state == forced_stopped_state){
     digitalWrite(13, HIGH);   // blink the led
