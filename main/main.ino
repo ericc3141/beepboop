@@ -1,4 +1,3 @@
-
 #include <ros.h>
 #include <std_msgs/Empty.h>
 
@@ -12,6 +11,12 @@ typedef enum{
   forced_stopped_state
  }states_t;
 
+typedef struct {
+  struct {
+    ultra_t left, right;
+  } ultra;
+} sensors_t;
+sensors_t sense = {};
 
 bool lineFollowed = false;
 int state;
@@ -32,14 +37,22 @@ ros::Subscriber<std_msgs::Empty> sub("toggle_led", &messageCb );
 void setup() {
    Serial.begin(9600);
    state = starting_state;
-   pinMode(13, OUTPUT);
-   nh.initNode();
-   nh.subscribe(sub);
+   //nh.initNode();
+   //nh.subscribe(sub);
+   sense.ultra.left = ultra_setup(13, 12);
+   sense.ultra.right = ultra_setup(11, 10);
 }
 
 void loop() {
- nh.spinOnce();
- Serial.print(digitalRead(13));
+ //nh.spinOnce();
+ ultra_read(sense.ultra.left);
+ ultra_read(sense.ultra.right);
+
+ Serial.print("left\t");
+ Serial.println(sense.ultra.left.dist);
+ Serial.print("right\t");
+ Serial.println(sense.ultra.right.dist);
+ 
  if (state == forced_stopped_state){
     digitalWrite(13, HIGH);   // blink the led
  }

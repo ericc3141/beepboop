@@ -1,5 +1,6 @@
-#include "SR04.h"
 #include<Wire.h>
+
+const long PULSE_TIMEOUT = 100000;
 
 typedef enum {LF_L_I = A0, 
  LF_R_I = A1,
@@ -8,24 +9,42 @@ typedef enum {LF_L_I = A0,
  OB_M_I = 2,
  }pin_ir_t;
 
-typedef enum {EDGE = 3, 
- TRIGGER = 4,
- MAX_DIST = 10
- }pin_ultra_t;
+
+typedef struct {
+  int p_echo, p_trig;
+  float dist;
+} ultra_t;
+
+ultra_t ultra_setup(int p_echo, int p_trig) {
+  ultra_t ultra = {p_echo, p_trig};
+  pinMode(ultra.p_echo, INPUT);
+  pinMode(ultra.p_trig, OUTPUT);
+  return ultra;
+}
+float ultra_read(ultra_t &ultra) {
+  digitalWrite(ultra.p_trig, LOW);
+  delayMicroseconds(2);
+  digitalWrite(ultra.p_trig, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(ultra.p_trig, LOW);
+  delayMicroseconds(2);
+  long d = pulseIn(ultra.p_echo, HIGH, PULSE_TIMEOUT);
+  ultra.dist = d * 100. / 5882.;
+  return ultra.dist;
+}
 
  
 int LF_THRESHOLD = 100;
 int GYTHRESHOLD = 100;
  
-SR04 sr04 = SR04(EDGE,TRIGGER);
 
 const int MPU_addr=0x68;  // I2C address of the MPU-6050
 int16_t AcX,AcY,AcZ,Tmp,GyX,GyY,GyZ;
 
 
 bool edgeDetected(){
- int a=sr04.Distance();
- return a > MAX_DIST;
+ //int a=sr04.Distance();
+ //return a > MAX_DIST;
 }
 
 bool obstacleDetected(){
