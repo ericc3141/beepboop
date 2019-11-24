@@ -22,7 +22,7 @@ void motor_drive(motor_t &motor, int power) {
   } else {
     digitalWrite(motor.p_pos, HIGH);
     digitalWrite(motor.p_neg, HIGH);
-    analogWrite(motor.p_enable, 255);
+    analogWrite(motor.p_enable, 0);
   }
 }
 
@@ -31,6 +31,7 @@ typedef struct {
   Servo servo;
   unsigned long start;
   bool dropped;
+  bool done;
 } tictac_t;
 tictac_t tictac_setup(int p_servo) {
   tictac_t tictac = {p_servo};
@@ -43,11 +44,12 @@ void tictac_drop(tictac_t &tictac) {
     return;
   }
   tictac.start = millis();
-  tictac.servo.write(70);
+  tictac.servo.write(72);
   tictac.dropped = true;
 }
 void tictac_loop(tictac_t &tictac) {
-  if (tictac.dropped && millis() - tictac.start > 2000) {
-    tictac.servo.write(90);
+  if (tictac.dropped && millis() - tictac.start > 3000) {
+    tictac.servo.write(87);
+    tictac.done = true;
   }
 }

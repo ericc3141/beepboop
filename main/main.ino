@@ -4,7 +4,7 @@
 #include "sensors.h"
 #include "actuators.h"
 
-const float ULTRA_THRESH = 10;
+const float ULTRA_THRESH = 15;
 const int MPU_addr=0x68;  // I2C address of the MPU-6050
 
 typedef enum{
@@ -55,12 +55,12 @@ ros::Subscriber<std_msgs::Empty> sub("toggle_led", &messageCb );
 
 void setup() {
   Serial.begin(9600);
-  //nh.initNode();
-  //nh.subscribe(sub);
+//  nh.initNode();
+//  nh.subscribe(sub);
 
   state = S_START;
   leds.estop = 22;
-  leds.armed = 24;
+  leds.armed = 9;
   leds.finished = 26;
   buttons.estop = 28;
   buttons.start = 30;
@@ -70,20 +70,27 @@ void setup() {
   pinMode(buttons.estop, INPUT_PULLUP);
   pinMode(buttons.start, INPUT_PULLUP);
 
-  sense.ultra.left = ultra_setup(13, 12);
-  sense.ultra.right = ultra_setup(11, 10);
-  sense.joystick = joystick_setup(A1, A2, A0, 330, 400);
+  sense.ultra.left = ultra_setup(34, 38);
+  sense.ultra.right = ultra_setup(32, 36);
+  sense.joystick = joystick_setup(A0, A1, A2, 512, 512);
 
   act.motor.left = motor_setup(7, 3, 4);
   act.motor.right = motor_setup(8, 6, 5);
   act.tictac = tictac_setup(2);
 }
 
+int clamp(int lo, int hi, int val) {
+  return max(lo, min(hi, val));
+}
 void drive(int power, int turn) {
-  //Serial.print("drive\t");
-  Serial.println(power);
-  motor_drive(act.motor.left, power-turn);
-  motor_drive(act.motor.right, power+turn);
+  int left = clamp(-255, 255, power-turn);
+  int right = clamp(-255, 255, power+turn);
+  Serial.print("\tdrive\t");
+  Serial.print(left);
+  Serial.print("\t");
+  Serial.println(right);
+  motor_drive(act.motor.left, left);
+  motor_drive(act.motor.right, right);
 }
 
 void displayState(leds_t leds, state_t state) {
@@ -91,17 +98,17 @@ void displayState(leds_t leds, state_t state) {
     case S_START:
     case S_ESTOP:
       digitalWrite(leds.estop, HIGH);
-      digitalWrite(leds.armed, LOW);
+      analogWrite(leds.armed, LOW);
       digitalWrite(leds.finished, LOW);
       break;
     case S_FINISH:
       digitalWrite(leds.estop, LOW);
-      digitalWrite(leds.armed, LOW);
-      digitalWrite(leds.finished, HIGH);
+      analogWrite(leds.armed, LOW);
+      digitalWrite(leds.finished, (millis()%1000 < 500)?HIGH:LOW);
       break;
     default:
       digitalWrite(leds.estop, LOW);
-      digitalWrite(leds.armed, (millis()%1300 < 100)?HIGH:LOW);
+      analogWrite(leds.armed, (millis()%1300 < 100)?255:60);
       digitalWrite(leds.finished, LOW);
   }
 }
@@ -138,14 +145,13 @@ void loop() {
   if (state == S_ESTOP) {
     return;
   }
-  //drive((int)(128*sense.joystick.y), (int)(128*sense.joystick.x));
-//  if (edgeDetected(sense)) {
-//    drive(0, 0);
-//    tictac_drop(act.tictac);
-//  } else {
-//    drive(80, 0);
-//  }
+
+  Serial.print("ultra\t");
+  Serial.print(sense.ultra.left.dist);
+  Serial.print("\t");
+  Serial.print(sense.ultra.right.dist);
   tictac_loop(act.tictac);
+  //drive((int)(255.*sense.joystick.y), (int)(255.*sense.joystick.x));
 
 
   if (state == S_ESTOP){ return; }
@@ -160,12 +166,15 @@ void loop() {
   } else if (state == S_RUN){
     if (edgeDetected(sense)|| obstacleDetected(sense)){
       tictac_drop(act.tictac);
-      drive(-100, 50);
+      if (act.tictac.done) {
+        state = S_FINISH;
+      }
+      drive(0, 0);
     } else if (spotDetected(sense) && lineFollowed){
       drive(0, 0);
       state = S_FINISH;
     } else{
-      drive(100, 0);
+      drive(128, 0);
     }
 
     if (inclineDetected(sense) && tic_tac_state == 0) {
