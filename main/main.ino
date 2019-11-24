@@ -4,7 +4,7 @@
 #include "sensors.h"
 #include "actuators.h"
 
-const float ULTRA_THRESH = 6;
+const float ULTRA_THRESH = 10;
 
  typedef enum{
   starting_state,
@@ -14,9 +14,20 @@ const float ULTRA_THRESH = 6;
  }states_t;
 
 typedef struct {
+  int armed, complete, estop;
+} leds_t;
+leds_t leds = {};
+
+typedef struct {
+  int estop;
+} buttons_t;
+buttons_t buttons = {};
+
+typedef struct {
   struct {
     ultra_t left, right;
   } ultra;
+  joystick_t joystick;
 } sensors_t;
 sensors_t sense = {};
 
@@ -24,6 +35,7 @@ typedef struct {
   struct {
     motor_t left, right;
   } motor;
+  tictac_t tictac;
 } actuators_t;
 actuators_t act = {};
 
@@ -46,38 +58,55 @@ ros::Subscriber<std_msgs::Empty> sub("toggle_led", &messageCb );
 void setup() {
    Serial.begin(9600);
    state = starting_state;
+   leds.estop = 22;
+   buttons.estop = 28;
+   pinMode(leds.estop, OUTPUT);
+   pinMode(buttons.estop, INPUT_PULLUP);
    //nh.initNode();
    //nh.subscribe(sub);
    sense.ultra.left = ultra_setup(13, 12);
    sense.ultra.right = ultra_setup(11, 10);
+   sense.joystick = joystick_setup(A1, A2, A0, 330, 400);
 
    act.motor.left = motor_setup(7, 3, 4);
-   act.motor.right = motor_setup(7, 6, 5);
+   act.motor.right = motor_setup(8, 6, 5);
+   act.tictac = tictac_setup(2);
 }
 
-void drive(int power) {
-  Serial.print("drive\t");
-  Serial.println(power);
-  motor_drive(act.motor.left, power);
-  motor_drive(act.motor.right, power);
+void drive(int power, int turn) {
+  //Serial.print("drive\t");
+  //Serial.println(power);
+  motor_drive(act.motor.left, power-turn);
+  motor_drive(act.motor.right, power+turn);
 }
 
 void loop() {
  //nh.spinOnce();
  ultra_read(sense.ultra.left);
  ultra_read(sense.ultra.right);
+ joystick_read(sense.joystick);
+
+  drive((int)(128*sense.joystick.y), (int)(128*sense.joystick.x));
+
+  Serial.println(sense.ultra.left.dist);
+  Serial.println(sense.ultra.right.dist);
 
  if (sense.ultra.left.dist > ULTRA_THRESH || sense.ultra.right.dist > ULTRA_THRESH) {
-  drive(0);
+  //drive(0);
+  tictac_drop(act.tictac);
  } else {
-  drive(80);
+  //drive(80);
+ }
+ tictac_loop(act.tictac);
+ if (digitalRead(buttons.estop) == LOW) {
+  state = forced_stopped_state;
  }
  
  if (state == forced_stopped_state){
-    digitalWrite(13, HIGH);   // blink the led
- }
- else{
-    digitalWrite(13, LOW);   // blink the led
+  Serial.print("hello");
+  digitalWrite(leds.estop, HIGH);
+ } else {
+  digitalWrite(leds.estop, LOW);
  }
  if (state == starting_state){
     if (digitalRead(start_button) == HIGH){

@@ -33,6 +33,21 @@ float ultra_read(ultra_t &ultra) {
   return ultra.dist;
 }
 
+typedef struct {
+  int p_x, p_y, p_button;
+  float zero, scale;
+  float x, y, button;
+} joystick_t;
+joystick_t joystick_setup(int p_x, int p_y, int p_button, float zero, float scale) {
+  joystick_t joystick = {p_x, p_y, p_button, zero, scale};
+  return joystick;
+}
+void joystick_read(joystick_t &joystick) {
+  joystick.x = ((float)analogRead(joystick.p_x) - joystick.zero) / joystick.scale;
+  joystick.y = ((float)analogRead(joystick.p_y) - joystick.zero) / joystick.scale;
+  joystick.button = analogRead(joystick.p_button);
+}
+
  
 int LF_THRESHOLD = 100;
 int GYTHRESHOLD = 100;

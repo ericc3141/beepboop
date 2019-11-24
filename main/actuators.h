@@ -1,3 +1,5 @@
+#include <Servo.h>
+
 typedef struct {
   int p_enable, p_pos, p_neg;
 } motor_t;
@@ -21,6 +23,32 @@ void motor_drive(motor_t &motor, int power) {
     digitalWrite(motor.p_pos, HIGH);
     digitalWrite(motor.p_neg, HIGH);
     analogWrite(motor.p_enable, 255);
+  }
+}
+
+typedef struct {
+  int p_servo;
+  Servo servo;
+  unsigned long start;
+  bool dropped;
+} tictac_t;
+tictac_t tictac_setup(int p_servo) {
+  tictac_t tictac = {p_servo};
+  tictac.servo.attach(p_servo);
+  tictac.servo.write(90);
+  return tictac;
+}
+void tictac_drop(tictac_t &tictac) {
+  if (tictac.dropped) {
+    return;
+  }
+  tictac.start = millis();
+  tictac.servo.write(70);
+  tictac.dropped = true;
+}
+void tictac_loop(tictac_t &tictac) {
+  if (tictac.dropped && millis() - tictac.start > 2000) {
+    tictac.servo.write(90);
   }
 }
 
