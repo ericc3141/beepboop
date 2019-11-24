@@ -52,45 +52,29 @@ void joystick_read(joystick_t &joystick) {
 int LF_THRESHOLD = 100;
 int GYTHRESHOLD = 100;
  
-
-const int MPU_addr=0x68;  // I2C address of the MPU-6050
-int16_t AcX,AcY,AcZ,Tmp,GyX,GyY,GyZ;
-
-
-bool edgeDetected(){
- //int a=sr04.Distance();
- //return a > MAX_DIST;
-}
-
-bool obstacleDetected(){
- if (digitalRead(OB_L_I) == HIGH || digitalRead(OB_R_I) == HIGH || digitalRead(OB_M_I) == HIGH){
-   return true;
- }
- return false;
-}
-
-bool spotDetected(){
- if (analogRead(LF_L_I) < LF_THRESHOLD && analogRead(LF_R_I) < LF_THRESHOLD){
-   return true;
- }
- return false;
-}
-
-
-bool inclineDetected(){
-  Wire.beginTransmission(MPU_addr);
+typedef struct {
+  int addr;
+  union {
+    struct {
+      int16_t ax,ay,az,tmp,gx,gy,gz;
+    } v;
+    float reg[14];
+  } val;
+} imu_t;
+void imu_read(imu_t &imu) {
+  Wire.beginTransmission(imu.addr);
   Wire.write(0x3B);  // starting with register 0x3B (ACCEL_XOUT_H)
   Wire.endTransmission(false);
-  Wire.requestFrom(MPU_addr,14,true);  // request a total of 14 registers
-  AcX=Wire.read()<<8|Wire.read();  // 0x3B (ACCEL_XOUT_H) & 0x3C (ACCEL_XOUT_L)    
-  AcY=Wire.read()<<8|Wire.read();  // 0x3D (ACCEL_YOUT_H) & 0x3E (ACCEL_YOUT_L)
-  AcZ=Wire.read()<<8|Wire.read();  // 0x3F (ACCEL_ZOUT_H) & 0x40 (ACCEL_ZOUT_L)
-  Tmp=Wire.read()<<8|Wire.read();  // 0x41 (TEMP_OUT_H) & 0x42 (TEMP_OUT_L)
-  GyX=Wire.read()<<8|Wire.read();  // 0x43 (GYRO_XOUT_H) & 0x44 (GYRO_XOUT_L)
-  GyY=Wire.read()<<8|Wire.read();  // 0x45 (GYRO_YOUT_H) & 0x46 (GYRO_YOUT_L)
-  GyZ=Wire.read()<<8|Wire.read();  // 0x47 (GYRO_ZOUT_H) & 0x48 (GYRO_ZOUT_L) 
-  if (GyX > GYTHRESHOLD){
-    return true;
+  Wire.requestFrom(imu.addr,14,true);  // request a total of 14 registers
+  int i = 0;
+  while (Wire.available()) {
+    imu.val.reg[i] = Wire.read();
   }
-  
+//  AcX=Wire.read()<<8|Wire.read();  // 0x3B (ACCEL_XOUT_H) & 0x3C (ACCEL_XOUT_L)
+//  AcY=Wire.read()<<8|Wire.read();  // 0x3D (ACCEL_YOUT_H) & 0x3E (ACCEL_YOUT_L)
+//  AcZ=Wire.read()<<8|Wire.read();  // 0x3F (ACCEL_ZOUT_H) & 0x40 (ACCEL_ZOUT_L)
+//  Tmp=Wire.read()<<8|Wire.read();  // 0x41 (TEMP_OUT_H) & 0x42 (TEMP_OUT_L)
+//  GyX=Wire.read()<<8|Wire.read();  // 0x43 (GYRO_XOUT_H) & 0x44 (GYRO_XOUT_L)
+//  GyY=Wire.read()<<8|Wire.read();  // 0x45 (GYRO_YOUT_H) & 0x46 (GYRO_YOUT_L)
+//  GyZ=Wire.read()<<8|Wire.read();  // 0x47 (GYRO_ZOUT_H) & 0x48 (GYRO_ZOUT_L)
 }
