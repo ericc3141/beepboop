@@ -111,14 +111,19 @@ ros::Subscriber<std_msgs::Empty> sub("toggle_led", &messageCb );
 void setup() {
    Serial.begin(9600);
    state = starting_state;
+   pinMode(13, OUTPUT);
    nh.initNode();
    nh.subscribe(sub);
 }
 
 void loop() {
  nh.spinOnce();
+ Serial.print(digitalRead(13));
  if (state == forced_stopped_state){
-  Serial.print("hello");
+    digitalWrite(13, HIGH);   // blink the led
+ }
+ else{
+    digitalWrite(13, LOW);   // blink the led
  }
  if (state == starting_state){
     if (digitalRead(start_button) == HIGH){
