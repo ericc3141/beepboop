@@ -3,11 +3,11 @@
 #include <ros.h>
 #include <std_msgs/Empty.h>
 
-typedef enum {LF_L_I = A0, 
- LF_R_I = A1,
- OB_L_I = 0,
- OB_R_I = 1,
- OB_M_I = 2,
+typedef enum {LF_L_I = null, 
+ LF_R_I = null,
+ OB_L_I = A0,
+ OB_R_I = A1,
+ OB_M_I = A2,
  }pin_ir_t;
 
 typedef enum {EDGE = 3, 
