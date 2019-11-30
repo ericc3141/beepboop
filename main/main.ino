@@ -28,6 +28,9 @@ typedef struct {
   struct {
     ultra_t left, right;
   } ultra;
+  struct {
+    ir_t left, right;
+  } line;
   joystick_t joystick;
 } sensors_t;
 sensors_t sense = {};
@@ -72,10 +75,11 @@ void setup() {
 
   sense.ultra.left = ultra_setup(34, 38);
   sense.ultra.right = ultra_setup(32, 36);
+  sense.line.left = ir_setup(A0);
   sense.joystick = joystick_setup(A0, A1, A2, 512, 512);
 
-  act.motor.left = motor_setup(7, 3, 4);
-  act.motor.right = motor_setup(8, 6, 5);
+  act.motor.right = motor_setup(8, 3, 4);
+  act.motor.left = motor_setup(7, 6, 5);
   act.tictac = tictac_setup(2);
 }
 
@@ -88,7 +92,7 @@ void drive(int power, int turn) {
   Serial.print("\tdrive\t");
   Serial.print(left);
   Serial.print("\t");
-  Serial.println(right);
+  Serial.print(right);
   motor_drive(act.motor.left, left);
   motor_drive(act.motor.right, right);
 }
@@ -133,9 +137,11 @@ bool inclineDetected(sensors_t sense){
 
 void loop() {
   delay(10);
+  Serial.print("\n");
   //nh.spinOnce();
   ultra_read(sense.ultra.left);
   ultra_read(sense.ultra.right);
+  ir_read(sense.line.left);
   joystick_read(sense.joystick);
   if (digitalRead(buttons.estop) == LOW) {
     state = S_ESTOP;
@@ -146,10 +152,11 @@ void loop() {
     return;
   }
 
-  Serial.print("ultra\t");
-  Serial.print(sense.ultra.left.dist);
-  Serial.print("\t");
-  Serial.print(sense.ultra.right.dist);
+//  Serial.print("ultra\t");
+//  Serial.print(sense.ultra.left.dist);
+//  Serial.print("\t");
+//  Serial.print(sense.ultra.right.dist);
+  Serial.print(sense.line.left.light);
   tictac_loop(act.tictac);
   //drive((int)(255.*sense.joystick.y), (int)(255.*sense.joystick.x));
 
@@ -165,16 +172,20 @@ void loop() {
     }
   } else if (state == S_RUN){
     if (edgeDetected(sense)|| obstacleDetected(sense)){
-      tictac_drop(act.tictac);
-      if (act.tictac.done) {
-        state = S_FINISH;
-      }
-      drive(0, 0);
+//      tictac_drop(act.tictac);
+//      if (act.tictac.done) {
+//        state = S_FINISH;
+//      }
+//      drive(0, 0);
     } else if (spotDetected(sense) && lineFollowed){
       drive(0, 0);
       state = S_FINISH;
     } else{
-      drive(128, 0);
+      if (sense.line.left.light < 290) {
+        drive(60, -30);
+      } else {
+        drive(60, 30);
+      }
     }
 
     if (inclineDetected(sense) && tic_tac_state == 0) {

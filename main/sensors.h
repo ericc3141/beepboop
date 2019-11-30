@@ -51,6 +51,20 @@ void joystick_read(joystick_t &joystick) {
  
 int LF_THRESHOLD = 100;
 int GYTHRESHOLD = 100;
+
+typedef struct {
+  int p_in;
+  float light;
+} ir_t;
+ir_t ir_setup(int p_in) {
+  ir_t ir = {p_in};
+  pinMode(p_in, INPUT);
+  return ir;
+}
+float ir_read(ir_t &ir) {
+  ir.light = analogRead(ir.p_in);
+  return ir.light;
+}
  
 typedef struct {
   int addr;
