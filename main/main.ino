@@ -1,169 +1,188 @@
-#include "SR04.h"
-#include<Wire.h>
 #include <ros.h>
 #include <std_msgs/Empty.h>
 
-typedef enum {LF_L_I = null, 
- LF_R_I = null,
- OB_L_I = A0,
- OB_R_I = A1,
- OB_M_I = A2,
- }pin_ir_t;
+#include "sensors.h"
+#include "actuators.h"
 
-typedef enum {EDGE = 3, 
- TRIGGER = 4,
- MAX_DIST = 10
- }pin_ultra_t;
+const float ULTRA_THRESH = 15;
+const int MPU_addr=0x68;  // I2C address of the MPU-6050
 
-typedef enum{EN_A = 4,
- EN_B = 5,
- IN_1 = 6,
- IN_2 = 7,
- IN_3 = 8,
- IN_4 = 9,
- }pin_motor_t;
+typedef enum{
+  S_START,
+  S_RUN,
+  S_FINISH,
+  S_ESTOP
+} state_t;
 
- typedef enum{
-  starting_state,
-  default_state,
-  finished_state,
-  forced_stopped_state
- }states_t;
+typedef struct {
+  int armed, finished, estop;
+} leds_t;
+leds_t leds = {};
 
+typedef struct {
+  int estop, start;
+} buttons_t;
+buttons_t buttons = {};
+
+typedef struct {
+  struct {
+    ultra_t left, right;
+  } ultra;
+  joystick_t joystick;
+} sensors_t;
+sensors_t sense = {};
+
+typedef struct {
+  struct {
+    motor_t left, right;
+  } motor;
+  tictac_t tictac;
+} actuators_t;
+actuators_t act = {};
 
 bool lineFollowed = false;
-SR04 sr04 = SR04(EDGE,TRIGGER);
-int state;
+state_t state;
 int start_button = 10;
 int tic_tac_state = 0;
-int LF_THRESHOLD = 100;
-int GYTHRESHOLD = 100;
-const int MPU_addr=0x68;  // I2C address of the MPU-6050
-int16_t AcX,AcY,AcZ,Tmp,GyX,GyY,GyZ;
 
-
-bool edgeDetected(){
- int a=sr04.Distance();
- return a > MAX_DIST;
-}
-
-bool obstacleDetected(){
- if (digitalRead(OB_L_I) == HIGH || digitalRead(OB_R_I) == HIGH || digitalRead(OB_M_I) == HIGH){
-   return true;
- }
- return false;
-}
-
-bool spotDetected(){
- if (analogRead(LF_L_I) < LF_THRESHOLD && analogRead(LF_R_I) < LF_THRESHOLD){
-   return true;
- }
- return false;
-}
-
-
-bool inclineDetected(){
-  Wire.beginTransmission(MPU_addr);
-  Wire.write(0x3B);  // starting with register 0x3B (ACCEL_XOUT_H)
-  Wire.endTransmission(false);
-  Wire.requestFrom(MPU_addr,14,true);  // request a total of 14 registers
-  AcX=Wire.read()<<8|Wire.read();  // 0x3B (ACCEL_XOUT_H) & 0x3C (ACCEL_XOUT_L)    
-  AcY=Wire.read()<<8|Wire.read();  // 0x3D (ACCEL_YOUT_H) & 0x3E (ACCEL_YOUT_L)
-  AcZ=Wire.read()<<8|Wire.read();  // 0x3F (ACCEL_ZOUT_H) & 0x40 (ACCEL_ZOUT_L)
-  Tmp=Wire.read()<<8|Wire.read();  // 0x41 (TEMP_OUT_H) & 0x42 (TEMP_OUT_L)
-  GyX=Wire.read()<<8|Wire.read();  // 0x43 (GYRO_XOUT_H) & 0x44 (GYRO_XOUT_L)
-  GyY=Wire.read()<<8|Wire.read();  // 0x45 (GYRO_YOUT_H) & 0x46 (GYRO_YOUT_L)
-  GyZ=Wire.read()<<8|Wire.read();  // 0x47 (GYRO_ZOUT_H) & 0x48 (GYRO_ZOUT_L) 
-  if (GyX > GYTHRESHOLD){
-    return true;
-  }
-  
-}
-
-void dropTicTac(){
-
-}
-
-void driveForwardandStop(){
-
-}
-
-void driveForward(){
-
-}
-
-void goBackwards(){
-  
-}
-
-void doTurn(){
-  
-}
 
 ros::NodeHandle nh;
 void messageCb( const std_msgs::Empty& toggle_msg){
-  state = forced_stopped_state;
+  state = S_ESTOP;
 } 
 ros::Subscriber<std_msgs::Empty> sub("toggle_led", &messageCb );
- 
 
 
 void setup() {
-   Serial.begin(9600);
-   state = starting_state;
-   pinMode(13, OUTPUT);
-   nh.initNode();
-   nh.subscribe(sub);
+  Serial.begin(9600);
+//  nh.initNode();
+//  nh.subscribe(sub);
+
+  state = S_START;
+  leds.estop = 22;
+  leds.armed = 9;
+  leds.finished = 26;
+  buttons.estop = 28;
+  buttons.start = 30;
+  pinMode(leds.estop, OUTPUT);
+  pinMode(leds.armed, OUTPUT);
+  pinMode(leds.finished, OUTPUT);
+  pinMode(buttons.estop, INPUT_PULLUP);
+  pinMode(buttons.start, INPUT_PULLUP);
+
+  sense.ultra.left = ultra_setup(34, 38);
+  sense.ultra.right = ultra_setup(32, 36);
+  sense.joystick = joystick_setup(A0, A1, A2, 512, 512);
+
+  act.motor.left = motor_setup(7, 3, 4);
+  act.motor.right = motor_setup(8, 6, 5);
+  act.tictac = tictac_setup(2);
+}
+
+int clamp(int lo, int hi, int val) {
+  return max(lo, min(hi, val));
+}
+void drive(int power, int turn) {
+  int left = clamp(-255, 255, power-turn);
+  int right = clamp(-255, 255, power+turn);
+  Serial.print("\tdrive\t");
+  Serial.print(left);
+  Serial.print("\t");
+  Serial.println(right);
+  motor_drive(act.motor.left, left);
+  motor_drive(act.motor.right, right);
+}
+
+void displayState(leds_t leds, state_t state) {
+  switch (state) {
+    case S_START:
+    case S_ESTOP:
+      digitalWrite(leds.estop, HIGH);
+      analogWrite(leds.armed, LOW);
+      digitalWrite(leds.finished, LOW);
+      break;
+    case S_FINISH:
+      digitalWrite(leds.estop, LOW);
+      analogWrite(leds.armed, LOW);
+      digitalWrite(leds.finished, (millis()%1000 < 500)?HIGH:LOW);
+      break;
+    default:
+      digitalWrite(leds.estop, LOW);
+      analogWrite(leds.armed, (millis()%1300 < 100)?255:60);
+      digitalWrite(leds.finished, LOW);
+  }
+}
+
+bool edgeDetected(sensors_t sense) {
+  return sense.ultra.left.dist > ULTRA_THRESH || sense.ultra.right.dist > ULTRA_THRESH;
+}
+
+bool obstacleDetected(sensors_t sense){
+  // TODO
+  return false;
+}
+
+bool spotDetected(sensors_t sense){
+  // TODO
+  return false;
+}
+bool inclineDetected(sensors_t sense){
+  // TODO
+  return false;
 }
 
 void loop() {
- nh.spinOnce();
- Serial.print(digitalRead(13));
- if (state == forced_stopped_state){
-    digitalWrite(13, HIGH);   // blink the led
- }
- else{
-    digitalWrite(13, LOW);   // blink the led
- }
- if (state == starting_state){
-    if (digitalRead(start_button) == HIGH){
-    delay(3000);
-    state = default_state;
-    }
-    else{
+  delay(10);
+  //nh.spinOnce();
+  ultra_read(sense.ultra.left);
+  ultra_read(sense.ultra.right);
+  joystick_read(sense.joystick);
+  if (digitalRead(buttons.estop) == LOW) {
+    state = S_ESTOP;
+  }
+
+  displayState(leds, state);
+  if (state == S_ESTOP) {
+    return;
+  }
+
+  Serial.print("ultra\t");
+  Serial.print(sense.ultra.left.dist);
+  Serial.print("\t");
+  Serial.print(sense.ultra.right.dist);
+  tictac_loop(act.tictac);
+  //drive((int)(255.*sense.joystick.y), (int)(255.*sense.joystick.x));
+
+
+  if (state == S_ESTOP){ return; }
+  if (state == S_START){
+    if (digitalRead(buttons.start) == LOW){
+      delay(3000);
+      state = S_RUN;
+    } else{
       delay(100);
       return;
     }
-  }
-  
- else if (state == default_state){
-   
-    if (edgeDetected()|| obstacleDetected()){
-      goBackwards();
-      doTurn();
-    }
-  
-    else if (spotDetected() && lineFollowed){
-      driveForwardandStop();
-      state = finished_state;
-    }
-  
-    else{
-      driveForward();
+  } else if (state == S_RUN){
+    if (edgeDetected(sense)|| obstacleDetected(sense)){
+      tictac_drop(act.tictac);
+      if (act.tictac.done) {
+        state = S_FINISH;
+      }
+      drive(0, 0);
+    } else if (spotDetected(sense) && lineFollowed){
+      drive(0, 0);
+      state = S_FINISH;
+    } else{
+      drive(128, 0);
     }
 
-    if (inclineDetected() && tic_tac_state ==0){
+    if (inclineDetected(sense) && tic_tac_state == 0) {
       tic_tac_state =1;
     }
-
-    if (!inclineDetected() && tic_tac_state ==1){
+    if (!inclineDetected(sense) && tic_tac_state ==1){
       tic_tac_state = 2;
-      dropTicTac();
+      tictac_drop(act.tictac);
     }
   }
-
- else{
-      return;
-    }
- }
-  
+}
