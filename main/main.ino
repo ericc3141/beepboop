@@ -5,7 +5,6 @@
 #include "actuators.h"
 
 const float ULTRA_THRESH = 15;
-const int MPU_addr=0x68;  // I2C address of the MPU-6050
 
 typedef enum{
   S_START,
@@ -34,6 +33,7 @@ typedef struct {
   struct {
     ir_t left, mid, right;
   } obstacle;
+  imu_t imu;
   joystick_t joystick;
 } sensors_t;
 sensors_t sense = {};
@@ -69,6 +69,7 @@ ros::Subscriber<std_msgs::Empty> sub("toggle_led", &messageCb );
 
 
 void setup() {
+  Wire.begin();
   Serial.begin(9600);
 //  nh.initNode();
 //  nh.subscribe(sub);
@@ -87,10 +88,13 @@ void setup() {
 
   sense.ultra.left = ultra_setup(34, 38);
   sense.ultra.right = ultra_setup(32, 36);
+  sense.line.left = ir_setup(A4);
+  sense.line.right = ir_setup(A3);
   sense.obstacle.left = ir_setup(A0);
   sense.obstacle.right = ir_setup(A1);
   sense.obstacle.mid = ir_setup(A2);
   sense.joystick = joystick_setup(A0, A1, A2, 512, 512);
+  sense.imu = imu_setup(0x68);
 
   act.motor.right = motor_setup(8, 3, 4);
   act.motor.left = motor_setup(7, 6, 5);
@@ -103,10 +107,10 @@ int clamp(int lo, int hi, int val) {
 void drive(int power, int turn) {
   int left = clamp(-255, 255, power-turn);
   int right = clamp(-255, 255, power+turn);
-  Serial.print("\tdrive\t");
-  Serial.print(left);
-  Serial.print("\t");
-  Serial.print(right);
+//  Serial.print("\tdrive\t");
+//  Serial.print(left);
+//  Serial.print("\t");
+//  Serial.print(right);
   motor_drive(act.motor.left, left);
   motor_drive(act.motor.right, right);
 }
@@ -188,9 +192,13 @@ void loop() {
   ir_read(sense.obstacle.right);
   ir_read(sense.obstacle.mid);
   joystick_read(sense.joystick);
+  imu_read(sense.imu);
   if (digitalRead(buttons.estop) == LOW) {
     state = S_ESTOP;
   }
+
+  Serial.print("\t");
+  Serial.print(sense.imu.o.x);
 
   displayState(leds, state);
   drivefor();
@@ -199,13 +207,7 @@ void loop() {
     return;
   }
 
-//  Serial.print("ultra\t");
-//  Serial.print(sense.ultra.left.dist);
-//  Serial.print("\t");
-//  Serial.print(sense.ultra.right.dist);
-  Serial.print(sense.obstacle.left.light);
   tictac_loop(act.tictac);
-
 
   if (state == S_ESTOP){ return; }
   if (state == S_START){

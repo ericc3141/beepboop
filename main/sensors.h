@@ -48,10 +48,6 @@ void joystick_read(joystick_t &joystick) {
   joystick.button = analogRead(joystick.p_button);
 }
 
- 
-int LF_THRESHOLD = 100;
-int GYTHRESHOLD = 100;
-
 typedef struct {
   int p_in;
   float light;
@@ -65,30 +61,51 @@ float ir_read(ir_t &ir) {
   ir.light = analogRead(ir.p_in);
   return ir.light;
 }
- 
+
+typedef struct {
+  float x,y,z;
+} vec3f_t;
 typedef struct {
   int addr;
-  union {
-    struct {
-      int16_t ax,ay,az,tmp,gx,gy,gz;
-    } v;
-    float reg[14];
-  } val;
+  vec3f_t a, g, o;
 } imu_t;
+imu_t imu_setup(int addr) {
+  imu_t imu = {addr};
+  Wire.beginTransmission(addr);
+  Wire.write(0x6B);
+  Wire.write(0);
+  Wire.endTransmission(true);
+  return imu;
+}
 void imu_read(imu_t &imu) {
   Wire.beginTransmission(imu.addr);
   Wire.write(0x3B);  // starting with register 0x3B (ACCEL_XOUT_H)
   Wire.endTransmission(false);
   Wire.requestFrom(imu.addr,14,true);  // request a total of 14 registers
-  int i = 0;
+
+  union {
+    struct {
+      int16_t ax,ay,az,tmp,gx,gy,gz;
+    } val;
+    char reg[14];
+  } raw;
+  int i = 1;
   while (Wire.available()) {
-    imu.val.reg[i] = Wire.read();
+    raw.reg[i] = Wire.read();
+    i += 1;
   }
-//  AcX=Wire.read()<<8|Wire.read();  // 0x3B (ACCEL_XOUT_H) & 0x3C (ACCEL_XOUT_L)
-//  AcY=Wire.read()<<8|Wire.read();  // 0x3D (ACCEL_YOUT_H) & 0x3E (ACCEL_YOUT_L)
-//  AcZ=Wire.read()<<8|Wire.read();  // 0x3F (ACCEL_ZOUT_H) & 0x40 (ACCEL_ZOUT_L)
-//  Tmp=Wire.read()<<8|Wire.read();  // 0x41 (TEMP_OUT_H) & 0x42 (TEMP_OUT_L)
-//  GyX=Wire.read()<<8|Wire.read();  // 0x43 (GYRO_XOUT_H) & 0x44 (GYRO_XOUT_L)
-//  GyY=Wire.read()<<8|Wire.read();  // 0x45 (GYRO_YOUT_H) & 0x46 (GYRO_YOUT_L)
-//  GyZ=Wire.read()<<8|Wire.read();  // 0x47 (GYRO_ZOUT_H) & 0x48 (GYRO_ZOUT_L)
+
+  float alsb = 16384;
+  float glsb = 131;
+  imu.a.x = (float)raw.val.ax / alsb;
+  imu.a.y = (float)raw.val.ay / alsb;
+  imu.a.z = (float)raw.val.az / alsb;
+
+  imu.g.x = (float)raw.val.gx / glsb;
+  imu.g.y = (float)raw.val.gy / glsb;
+  imu.g.z = (float)raw.val.gz / glsb;
+
+  imu.o.x = RAD_TO_DEG * (atan2(-imu.a.y, -imu.a.z)+PI);
+  imu.o.y = RAD_TO_DEG * (atan2(-imu.a.x, -imu.a.z)+PI);
+  imu.o.z = RAD_TO_DEG * (atan2(-imu.a.y, -imu.a.x)+PI);
 }
