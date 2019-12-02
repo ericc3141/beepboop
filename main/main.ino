@@ -67,13 +67,15 @@ void messageCb( const std_msgs::Empty& toggle_msg){
 } 
 ros::Subscriber<std_msgs::Empty> sub("toggle_led", &messageCb );
 
-
+int myTurnTime[] = {700, 700, 900, 900, 1100,1100};
+int myTurnDir[] = {-1,1,-1,1,-1,1};
+int turnVar;
 void setup() {
   Wire.begin();
   Serial.begin(9600);
 //  nh.initNode();
 //  nh.subscribe(sub);
-
+  turnVar = 0;
   state = S_START;
   drive_state = D_FORWARD;
   leds.estop = 22;
@@ -86,7 +88,7 @@ void setup() {
   pinMode(leds.finished, OUTPUT);
   pinMode(buttons.estop, INPUT_PULLUP);
   pinMode(buttons.start, INPUT_PULLUP);
-
+ 
   sense.ultra.left = ultra_setup(34, 38);
   sense.ultra.right = ultra_setup(32, 36);
   sense.line.left = ir_setup(A4);
@@ -189,7 +191,7 @@ void loop() {
     case D_FORWARD: Serial.print("forward");break;
     case D_REVERSE: Serial.print("reverse");break;
     case D_TURN: Serial.print("turn");break;
-    default: Serial.print("crap");
+    default: Serial.print("broken");
   }
 
   if (state == S_ESTOP) {
@@ -207,15 +209,18 @@ void loop() {
     if (sense.ultra.left.dist > 15) {
       drive_state = D_REVERSE;
       drive_remaining = 700;
-      drive_turn = -1;
+      turnVar = (turnVar+1) %6;
+      drive_turn = myTurnDir[turnVar];
     } if (sense.ultra.right.dist > 15) {
       drive_state = D_REVERSE;
       drive_remaining = 700;
-      drive_turn = 1;
+      turnVar = (turnVar+1) %6;
+      drive_turn = myTurnDir[turnVar];
     } else if (obstacleDetected(sense)) {
       drive_state = D_REVERSE;
       drive_remaining = 700;
-      drive_turn = (random(2) == 0) ? -1 : 1;
+      turnVar = (turnVar+1) %6;
+      drive_turn = myTurnDir[turnVar];
     } else if (spotDetected(sense) && lineFollowed){
       state = S_FINISH;
       drive_remaining = -1;
@@ -223,7 +228,7 @@ void loop() {
 
     if (drive_state == D_REVERSE && drive_remaining < 0) {
       drive_state = D_TURN;
-      drive_remaining = 500;
+      drive_remaining = myTurnTime[turnVar];
     } else if (drive_state == D_TURN && drive_remaining < 0) {
       drive_state = D_FORWARD;
       drive_remaining = 1;
