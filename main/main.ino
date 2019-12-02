@@ -4,8 +4,6 @@
 #include "sensors.h"
 #include "actuators.h"
 
-const float ULTRA_THRESH = 15;
-
 typedef enum{
   S_START,
   S_RUN,
@@ -51,9 +49,10 @@ state_t state;
 int start_button = 10;
 int tic_tac_state = 0;
 
-typedef enum {D_STOP, D_FORWARD, D_REVERSE, D_TURN} drive_t;
-drive_t drive_state = D_STOP;
-int drive_remaining;
+typedef enum {D_FORWARD, D_REVERSE, D_TURN} drive_t;
+drive_t drive_state;
+int drive_power[2] = {0,0};
+int drive_remaining = -1;
 
 typedef struct {
   unsigned long now, prev, dt;
@@ -75,6 +74,7 @@ void setup() {
 //  nh.subscribe(sub);
 
   state = S_START;
+  drive_state = D_FORWARD;
   leds.estop = 22;
   leds.armed = 9;
   leds.finished = 26;
@@ -107,35 +107,15 @@ int clamp(int lo, int hi, int val) {
 void drive(int power, int turn) {
   int left = clamp(-255, 255, power-turn);
   int right = clamp(-255, 255, power+turn);
-//  Serial.print("\tdrive\t");
-//  Serial.print(left);
-//  Serial.print("\t");
-//  Serial.print(right);
+  Serial.print("\tdrive\t");
+  Serial.print(left);
+  Serial.print("\t");
+  Serial.print(right);
   motor_drive(act.motor.left, left);
   motor_drive(act.motor.right, right);
 }
 
-void drivefor() {
-  drive_remaining -= gtime.dt;
-  if (drive_state == D_FORWARD) {
-    drive(50, 0);
-  } else if (drive_state == D_REVERSE) {
-    drive(-50, 0);
-    if (drive_remaining < 0) {
-      drive_state = D_TURN;
-      drive_remaining = 500;
-    }
-  } else if (drive_state == D_TURN) {
-    drive(0, 92);
-    if (drive_remaining < 0) {
-      drive_state = D_FORWARD;
-    }
-  } else {
-    drive(0, 0);
-  }
-
   //drive((int)(255.*sense.joystick.y), (int)(255.*sense.joystick.x));
-}
 
 void displayState(leds_t leds, state_t state) {
   switch (state) {
@@ -158,7 +138,7 @@ void displayState(leds_t leds, state_t state) {
 }
 
 bool edgeDetected(sensors_t sense) {
-  return sense.ultra.left.dist > ULTRA_THRESH || sense.ultra.right.dist > ULTRA_THRESH;
+  return sense.ultra.left.dist > 15 || sense.ultra.right.dist > 15;
 }
 
 bool obstacleDetected(sensors_t sense){
@@ -197,39 +177,65 @@ void loop() {
     state = S_ESTOP;
   }
 
+//  Serial.print("\t");
+//  Serial.print(sense.imu.o.x);
   Serial.print("\t");
-  Serial.print(sense.imu.o.x);
-
-  displayState(leds, state);
-  drivefor();
-  if (state == S_ESTOP) {
-    drive_state = D_STOP;
-    return;
+  Serial.print(edgeDetected(sense));
+  Serial.print("\t");
+  Serial.print(drive_remaining);
+  Serial.print("\t");
+  Serial.print(gtime.dt);
+//  Serial.print("\t");
+//  Serial.print(sense.ultra.left.dist);
+//  Serial.print("\t");
+//  Serial.print(sense.ultra.right.dist);
+//  Serial.print("\t");
+//  Serial.print(obstacleDetected(sense));
+  Serial.print("\t");
+  switch(drive_state) {
+    case D_FORWARD: Serial.print("forward");break;
+    case D_REVERSE: Serial.print("reverse");break;
+    case D_TURN: Serial.print("turn");break;
+    default: Serial.print("crap");
   }
 
-  tictac_loop(act.tictac);
-
-  if (state == S_ESTOP){ return; }
-  if (state == S_START){
+  if (state == S_ESTOP) {
+    drive_remaining = -1;
+  } else if (state == S_START){
+    drive_remaining = -1;
     if (digitalRead(buttons.start) == LOW){
       delay(3000);
       state = S_RUN;
       drive_state = D_FORWARD;
-    } else{
-      delay(100);
-      return;
+      drive_power[0] = 100;
+      drive_power[1] = 0;
     }
   } else if (state == S_RUN){
     if (edgeDetected(sense)|| obstacleDetected(sense)){
         drive_state = D_REVERSE;
-        drive_remaining = 1000;
+        drive_remaining = 5000;
     } else if (spotDetected(sense) && lineFollowed){
       state = S_FINISH;
-      drive_state = D_STOP;
-    } else{
-      if (sense.line.left.light < 290) {
-      } else {
-      }
+      drive_remaining = -1;
+    }
+
+    if (drive_state == D_REVERSE && drive_remaining <= 0) {
+      drive_state = D_TURN;
+      drive_remaining = 1000;
+    } else if (drive_state == D_TURN && drive_remaining <= 0) {
+      drive_state = D_FORWARD;
+      drive_remaining = 1;
+    } else {
+      drive_remaining = 1;
+    }
+    if (drive_state == D_FORWARD) {
+      drive_power[0] = 55; drive_power[1] = 0;
+    } else if (drive_state == D_REVERSE) {
+      drive_power[0] = -60; drive_power[1] = 0;
+    } else if (drive_state = D_TURN) {
+      drive_power[0] = 0; drive_power[1] = 100;
+    } else {
+      drive_power[0] = 0; drive_power[1] = 0;
     }
 
     if (inclineDetected(sense) && tic_tac_state == 0) {
@@ -240,4 +246,14 @@ void loop() {
       tictac_drop(act.tictac);
     }
   }
+
+
+  displayState(leds, state);
+  if (drive_remaining >= 0) {
+    drive(drive_power[0], drive_power[1]);
+    drive_remaining -= 1;
+  } else {
+    drive(0, 0);
+  }
+  tictac_loop(act.tictac);
 }
