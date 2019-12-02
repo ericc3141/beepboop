@@ -53,6 +53,7 @@ typedef enum {D_FORWARD, D_REVERSE, D_TURN} drive_t;
 drive_t drive_state;
 int drive_power[2] = {0,0};
 int drive_remaining = -1;
+int drive_turn = 1;
 
 typedef struct {
   unsigned long now, prev, dt;
@@ -177,20 +178,12 @@ void loop() {
     state = S_ESTOP;
   }
 
-//  Serial.print("\t");
-//  Serial.print(sense.imu.o.x);
   Serial.print("\t");
-  Serial.print(edgeDetected(sense));
+  Serial.print(sense.imu.o.x);
   Serial.print("\t");
-  Serial.print(drive_remaining);
+  Serial.print(sense.ultra.left.dist);
   Serial.print("\t");
-  Serial.print(gtime.dt);
-//  Serial.print("\t");
-//  Serial.print(sense.ultra.left.dist);
-//  Serial.print("\t");
-//  Serial.print(sense.ultra.right.dist);
-//  Serial.print("\t");
-//  Serial.print(obstacleDetected(sense));
+  Serial.print(sense.ultra.right.dist);
   Serial.print("\t");
   switch(drive_state) {
     case D_FORWARD: Serial.print("forward");break;
@@ -213,27 +206,33 @@ void loop() {
   } else if (state == S_RUN){
     if (edgeDetected(sense)|| obstacleDetected(sense)){
         drive_state = D_REVERSE;
-        drive_remaining = 5000;
+        drive_remaining = 500;
     } else if (spotDetected(sense) && lineFollowed){
       state = S_FINISH;
       drive_remaining = -1;
     }
 
-    if (drive_state == D_REVERSE && drive_remaining <= 0) {
+    if (drive_state == D_REVERSE && drive_remaining < 0) {
       drive_state = D_TURN;
-      drive_remaining = 1000;
-    } else if (drive_state == D_TURN && drive_remaining <= 0) {
+      drive_remaining = 500;
+      drive_turn *= -1;
+    } else if (drive_state == D_TURN && drive_remaining < 0) {
       drive_state = D_FORWARD;
       drive_remaining = 1;
-    } else {
+    } else if (drive_state == D_FORWARD) {
       drive_remaining = 1;
     }
     if (drive_state == D_FORWARD) {
-      drive_power[0] = 55; drive_power[1] = 0;
+      if (300 < sense.imu.o.x && sense.imu.o.x < 350) {
+        drive_power[0] = 55;//255;
+      } else {
+        drive_power[0] = 55;
+      }
+      drive_power[1] = 0;
     } else if (drive_state == D_REVERSE) {
       drive_power[0] = -60; drive_power[1] = 0;
     } else if (drive_state = D_TURN) {
-      drive_power[0] = 0; drive_power[1] = 100;
+      drive_power[0] = 0; drive_power[1] = drive_turn * 150;
     } else {
       drive_power[0] = 0; drive_power[1] = 0;
     }
@@ -251,7 +250,7 @@ void loop() {
   displayState(leds, state);
   if (drive_remaining >= 0) {
     drive(drive_power[0], drive_power[1]);
-    drive_remaining -= 1;
+    drive_remaining -= gtime.dt;
   } else {
     drive(0, 0);
   }
