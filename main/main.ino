@@ -204,9 +204,18 @@ void loop() {
       drive_power[1] = 0;
     }
   } else if (state == S_RUN){
-    if (edgeDetected(sense)|| obstacleDetected(sense)){
-        drive_state = D_REVERSE;
-        drive_remaining = 500;
+    if (sense.ultra.left.dist > 15) {
+      drive_state = D_REVERSE;
+      drive_remaining = 700;
+      drive_turn = -1;
+    } if (sense.ultra.right.dist > 15) {
+      drive_state = D_REVERSE;
+      drive_remaining = 700;
+      drive_turn = 1;
+    } else if (obstacleDetected(sense)) {
+      drive_state = D_REVERSE;
+      drive_remaining = 700;
+      drive_turn = (random(2) == 0) ? -1 : 1;
     } else if (spotDetected(sense) && lineFollowed){
       state = S_FINISH;
       drive_remaining = -1;
@@ -215,7 +224,6 @@ void loop() {
     if (drive_state == D_REVERSE && drive_remaining < 0) {
       drive_state = D_TURN;
       drive_remaining = 500;
-      drive_turn *= -1;
     } else if (drive_state == D_TURN && drive_remaining < 0) {
       drive_state = D_FORWARD;
       drive_remaining = 1;
@@ -224,15 +232,15 @@ void loop() {
     }
     if (drive_state == D_FORWARD) {
       if (300 < sense.imu.o.x && sense.imu.o.x < 350) {
-        drive_power[0] = 55;//255;
+        drive_power[0] = 60;//255;
       } else {
-        drive_power[0] = 55;
+        drive_power[0] = 60;
       }
       drive_power[1] = 0;
     } else if (drive_state == D_REVERSE) {
-      drive_power[0] = -60; drive_power[1] = 0;
+      drive_power[0] = -65; drive_power[1] = 0;
     } else if (drive_state = D_TURN) {
-      drive_power[0] = 0; drive_power[1] = drive_turn * 150;
+      drive_power[0] = 0; drive_power[1] = drive_turn * 180;
     } else {
       drive_power[0] = 0; drive_power[1] = 0;
     }
