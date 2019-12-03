@@ -29,7 +29,7 @@ typedef struct {
     ir_t left, right;
   } line;
   struct {
-    ir_t left, mid, right;
+    ultra_t left, mid, right;
   } obstacle;
   imu_t imu;
   joystick_t joystick;
@@ -92,11 +92,11 @@ void setup() {
  
   sense.ultra.left = ultra_setup(34, 38);
   sense.ultra.right = ultra_setup(32, 36);
-  sense.line.left = ir_setup(A4);
-  sense.line.right = ir_setup(A3);
-  sense.obstacle.left = ir_setup(A0);
-  sense.obstacle.right = ir_setup(A1);
-  sense.obstacle.mid = ir_setup(A2);
+  sense.line.left = ir_setup(A3);
+  sense.line.right = ir_setup(A4);
+  sense.obstacle.left = ultra_setup(42, 46);
+  sense.obstacle.right = ultra_setup(40, 44);
+//  sense.obstacle.mid = ultra_setup(A2, 1);
   sense.joystick = joystick_setup(A0, A1, A2, 512, 512);
   sense.imu = imu_setup(0x68);
 
@@ -146,10 +146,9 @@ bool edgeDetected(sensors_t sense) {
 }
 
 bool obstacleDetected(sensors_t sense){
-  const float thresh = 300;
-  return sense.obstacle.left.light < thresh
-      || sense.obstacle.right.light < thresh
-      || sense.obstacle.mid.light < thresh;
+  const float dist_thresh = 10;
+  return sense.obstacle.left.dist < dist_thresh
+      || sense.obstacle.right.dist < dist_thresh;
 }
 
 bool spotDetected(sensors_t sense){
@@ -174,9 +173,14 @@ void loop() {
   ultra_read(sense.ultra.right);
   ir_read(sense.line.left);
   ir_read(sense.line.right);
-  ir_read(sense.obstacle.left);
-  ir_read(sense.obstacle.right);
-  ir_read(sense.obstacle.mid);
+  Serial.print("IR RIGHT: ");
+  Serial.print("IR LEFT");
+  Serial.print(sense.line.left.light);
+  Serial.print(sense.line.right.light);
+  
+  ultra_read(sense.obstacle.left);
+  ultra_read(sense.obstacle.right);
+//  ir_read(sense.obstacle.mid);
   joystick_read(sense.joystick);
   imu_read(sense.imu);
   if (digitalRead(buttons.estop) == LOW) {
@@ -186,9 +190,9 @@ void loop() {
   Serial.print("\t");
   Serial.print(sense.imu.o.x);
   Serial.print("\t");
-  Serial.print(sense.ultra.left.dist);
+  Serial.print(sense.obstacle.left.dist);
   Serial.print("\t");
-  Serial.print(sense.ultra.right.dist);
+  Serial.print(sense.obstacle.right.dist);
   Serial.print("\t");
   switch(drive_state) {
     case D_FORWARD: Serial.print("forward");break;
@@ -212,21 +216,21 @@ void loop() {
     if (drive_state != D_REVERSE){
       if (sense.ultra.left.dist > 15) {
         drive_state = D_REVERSE;
-        drive_remaining = 600;
+        drive_remaining = 700;
         turnVar = (turnVar+1) %6;
         drive(0,0);
         delay(100);
         drive_turn = myTurnDir[turnVar];
       } if (sense.ultra.right.dist > 15) {
         drive_state = D_REVERSE;
-        drive_remaining = 600;
+        drive_remaining = 700;
         turnVar = (turnVar+1) %6;
         drive_turn = myTurnDir[turnVar];
         drive(0,0);
         delay(100);
       } else if (obstacleDetected(sense)) {
         drive_state = D_REVERSE;
-        drive_remaining = 600;
+        drive_remaining = 700;
         turnVar = (turnVar+1) %6;
         drive_turn = myTurnDir[turnVar];
         drive(0,0);
@@ -248,11 +252,25 @@ void loop() {
     }
     if (drive_state == D_FORWARD) {
       if (300 < sense.imu.o.x && sense.imu.o.x < 350) {
-        drive_power[0] = 60;//255;
-      } else {
-        drive_power[0] = 60;
+        drive_power[0] = 40;//255;
+        drive_power[1] = 0;
       }
-      drive_power[1] = 0;
+      else if (sense.line.left.light >300){
+        drive_power[0] =48;
+        drive_power[1] = 48;
+        Serial.println("turn left");
+      }
+      else if (sense.line.right.light > 300 ){
+        drive_power[0] = 48  ;
+        drive_power[1] = -48;
+        Serial.println("turn right");
+      }
+      
+      else {
+        drive_power[0] = 48;
+        drive_power[1] = 0;
+      }
+      
     } else if (drive_state == D_REVERSE) {
       drive_power[0] = -60; drive_power[1] = 0;
     } else if (drive_state = D_TURN) {
