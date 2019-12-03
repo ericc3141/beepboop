@@ -67,9 +67,10 @@ void messageCb( const std_msgs::Empty& toggle_msg){
 } 
 ros::Subscriber<std_msgs::Empty> sub("toggle_led", &messageCb );
 
-int myTurnTime[] = {700, 700, 900, 900, 1100,1100};
-int myTurnDir[] = {-1,1,-1,1,-1,1};
+int myTurnTime[] = {200, 200, 200,200, 200, 200};
+int myTurnDir[] = {-1,-1,-1,-1,-1,-1};
 int turnVar;
+
 void setup() {
   Wire.begin();
   Serial.begin(9600);
@@ -161,6 +162,8 @@ bool inclineDetected(sensors_t sense){
 }
 
 void loop() {
+  Serial.print("TurnVar");
+  Serial.print(turnVar);
   delay(10);
   gtime.prev = gtime.now;
   gtime.now = millis();
@@ -206,24 +209,32 @@ void loop() {
       drive_power[1] = 0;
     }
   } else if (state == S_RUN){
-    if (sense.ultra.left.dist > 15) {
-      drive_state = D_REVERSE;
-      drive_remaining = 700;
-      turnVar = (turnVar+1) %6;
-      drive_turn = myTurnDir[turnVar];
-    } if (sense.ultra.right.dist > 15) {
-      drive_state = D_REVERSE;
-      drive_remaining = 700;
-      turnVar = (turnVar+1) %6;
-      drive_turn = myTurnDir[turnVar];
-    } else if (obstacleDetected(sense)) {
-      drive_state = D_REVERSE;
-      drive_remaining = 700;
-      turnVar = (turnVar+1) %6;
-      drive_turn = myTurnDir[turnVar];
-    } else if (spotDetected(sense) && lineFollowed){
-      state = S_FINISH;
-      drive_remaining = -1;
+    if (drive_state != D_REVERSE){
+      if (sense.ultra.left.dist > 15) {
+        drive_state = D_REVERSE;
+        drive_remaining = 600;
+        turnVar = (turnVar+1) %6;
+        drive(0,0);
+        delay(100);
+        drive_turn = myTurnDir[turnVar];
+      } if (sense.ultra.right.dist > 15) {
+        drive_state = D_REVERSE;
+        drive_remaining = 600;
+        turnVar = (turnVar+1) %6;
+        drive_turn = myTurnDir[turnVar];
+        drive(0,0);
+        delay(100);
+      } else if (obstacleDetected(sense)) {
+        drive_state = D_REVERSE;
+        drive_remaining = 600;
+        turnVar = (turnVar+1) %6;
+        drive_turn = myTurnDir[turnVar];
+        drive(0,0);
+        delay(100);
+      } else if (spotDetected(sense) && lineFollowed){
+        state = S_FINISH;
+        drive_remaining = -1;
+      }
     }
 
     if (drive_state == D_REVERSE && drive_remaining < 0) {
@@ -243,7 +254,7 @@ void loop() {
       }
       drive_power[1] = 0;
     } else if (drive_state == D_REVERSE) {
-      drive_power[0] = -65; drive_power[1] = 0;
+      drive_power[0] = -60; drive_power[1] = 0;
     } else if (drive_state = D_TURN) {
       drive_power[0] = 0; drive_power[1] = drive_turn * 180;
     } else {
