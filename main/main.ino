@@ -4,9 +4,6 @@
 #include "sensors.h"
 #include "actuators.h"
 
-const float ULTRA_THRESH = 15;
-const int MPU_addr=0x68;  // I2C address of the MPU-6050
-
 typedef enum{
   S_START,
   S_RUN,
@@ -28,6 +25,13 @@ typedef struct {
   struct {
     ultra_t left, right;
   } ultra;
+  struct {
+    ir_t left, right;
+  } line;
+  struct {
+    ultra_t left, mid, right;
+  } obstacle;
+  imu_t imu;
   joystick_t joystick;
 } sensors_t;
 sensors_t sense = {};
@@ -45,6 +49,17 @@ state_t state;
 int start_button = 10;
 int tic_tac_state = 0;
 
+typedef enum {D_FORWARD, D_REVERSE, D_TURN} drive_t;
+drive_t drive_state;
+int drive_power[2] = {0,0};
+int drive_remaining = -1;
+int drive_turn = 1;
+
+typedef struct {
+  unsigned long now, prev, dt;
+} clock_t;
+clock_t gtime = {0, 0, 1};
+
 
 ros::NodeHandle nh;
 void messageCb( const std_msgs::Empty& toggle_msg){
@@ -52,13 +67,18 @@ void messageCb( const std_msgs::Empty& toggle_msg){
 } 
 ros::Subscriber<std_msgs::Empty> sub("toggle_led", &messageCb );
 
+int myTurnTime[] = {200, 200, 200,200, 200, 200};
+int myTurnDir[] = {-1,-1,-1,-1,-1,-1};
+int turnVar;
 
 void setup() {
+  Wire.begin();
   Serial.begin(9600);
 //  nh.initNode();
 //  nh.subscribe(sub);
-
+  turnVar = 0;
   state = S_START;
+  drive_state = D_FORWARD;
   leds.estop = 22;
   leds.armed = 9;
   leds.finished = 26;
@@ -69,13 +89,19 @@ void setup() {
   pinMode(leds.finished, OUTPUT);
   pinMode(buttons.estop, INPUT_PULLUP);
   pinMode(buttons.start, INPUT_PULLUP);
-
+ 
   sense.ultra.left = ultra_setup(34, 38);
   sense.ultra.right = ultra_setup(32, 36);
+  sense.line.left = ir_setup(A3);
+  sense.line.right = ir_setup(A4);
+  sense.obstacle.left = ultra_setup(42, 46);
+  sense.obstacle.right = ultra_setup(40, 44);
+//  sense.obstacle.mid = ultra_setup(A2, 1);
   sense.joystick = joystick_setup(A0, A1, A2, 512, 512);
+  sense.imu = imu_setup(0x68);
 
-  act.motor.left = motor_setup(7, 3, 4);
-  act.motor.right = motor_setup(8, 6, 5);
+  act.motor.right = motor_setup(8, 3, 4);
+  act.motor.left = motor_setup(7, 6, 5);
   act.tictac = tictac_setup(2);
 }
 
@@ -88,10 +114,12 @@ void drive(int power, int turn) {
   Serial.print("\tdrive\t");
   Serial.print(left);
   Serial.print("\t");
-  Serial.println(right);
+  Serial.print(right);
   motor_drive(act.motor.left, left);
   motor_drive(act.motor.right, right);
 }
+
+  //drive((int)(255.*sense.joystick.y), (int)(255.*sense.joystick.x));
 
 void displayState(leds_t leds, state_t state) {
   switch (state) {
@@ -114,12 +142,13 @@ void displayState(leds_t leds, state_t state) {
 }
 
 bool edgeDetected(sensors_t sense) {
-  return sense.ultra.left.dist > ULTRA_THRESH || sense.ultra.right.dist > ULTRA_THRESH;
+  return sense.ultra.left.dist > 15 || sense.ultra.right.dist > 15;
 }
 
 bool obstacleDetected(sensors_t sense){
-  // TODO
-  return false;
+  const float dist_thresh = 10;
+  return sense.obstacle.left.dist < dist_thresh
+      || sense.obstacle.right.dist < dist_thresh;
 }
 
 bool spotDetected(sensors_t sense){
@@ -132,49 +161,122 @@ bool inclineDetected(sensors_t sense){
 }
 
 void loop() {
+  Serial.print("TurnVar");
+  Serial.print(turnVar);
   delay(10);
+  gtime.prev = gtime.now;
+  gtime.now = millis();
+  gtime.dt = gtime.now - gtime.prev;
+  Serial.print("\n");
   //nh.spinOnce();
   ultra_read(sense.ultra.left);
   ultra_read(sense.ultra.right);
+  ir_read(sense.line.left);
+  ir_read(sense.line.right);
+  Serial.print("IR RIGHT: ");
+  Serial.print("IR LEFT");
+  Serial.print(sense.line.left.light);
+  Serial.print(sense.line.right.light);
+  
+  ultra_read(sense.obstacle.left);
+  ultra_read(sense.obstacle.right);
+//  ir_read(sense.obstacle.mid);
   joystick_read(sense.joystick);
+  imu_read(sense.imu);
   if (digitalRead(buttons.estop) == LOW) {
     state = S_ESTOP;
   }
 
-  displayState(leds, state);
-  if (state == S_ESTOP) {
-    return;
+  Serial.print("\t");
+  Serial.print(sense.imu.o.x);
+  Serial.print("\t");
+  Serial.print(sense.obstacle.left.dist);
+  Serial.print("\t");
+  Serial.print(sense.obstacle.right.dist);
+  Serial.print("\t");
+  switch(drive_state) {
+    case D_FORWARD: Serial.print("forward");break;
+    case D_REVERSE: Serial.print("reverse");break;
+    case D_TURN: Serial.print("turn");break;
+    default: Serial.print("broken");
   }
 
-  Serial.print("ultra\t");
-  Serial.print(sense.ultra.left.dist);
-  Serial.print("\t");
-  Serial.print(sense.ultra.right.dist);
-  tictac_loop(act.tictac);
-  //drive((int)(255.*sense.joystick.y), (int)(255.*sense.joystick.x));
-
-
-  if (state == S_ESTOP){ return; }
-  if (state == S_START){
+  if (state == S_ESTOP) {
+    drive_remaining = -1;
+  } else if (state == S_START){
+    drive_remaining = -1;
     if (digitalRead(buttons.start) == LOW){
       delay(3000);
       state = S_RUN;
-    } else{
-      delay(100);
-      return;
+      drive_state = D_FORWARD;
+      drive_power[0] = 100;
+      drive_power[1] = 0;
     }
   } else if (state == S_RUN){
-    if (edgeDetected(sense)|| obstacleDetected(sense)){
-      tictac_drop(act.tictac);
-      if (act.tictac.done) {
+    if (drive_state != D_REVERSE){
+      if (sense.ultra.left.dist > 15) {
+        drive_state = D_REVERSE;
+        drive_remaining = 700;
+        turnVar = (turnVar+1) %6;
+        drive(0,0);
+        delay(100);
+        drive_turn = myTurnDir[turnVar];
+      } if (sense.ultra.right.dist > 15) {
+        drive_state = D_REVERSE;
+        drive_remaining = 700;
+        turnVar = (turnVar+1) %6;
+        drive_turn = myTurnDir[turnVar];
+        drive(0,0);
+        delay(100);
+      } else if (obstacleDetected(sense)) {
+        drive_state = D_REVERSE;
+        drive_remaining = 700;
+        turnVar = (turnVar+1) %6;
+        drive_turn = myTurnDir[turnVar];
+        drive(0,0);
+        delay(100);
+      } else if (spotDetected(sense) && lineFollowed){
         state = S_FINISH;
+        drive_remaining = -1;
       }
-      drive(0, 0);
-    } else if (spotDetected(sense) && lineFollowed){
-      drive(0, 0);
-      state = S_FINISH;
-    } else{
-      drive(128, 0);
+    }
+
+    if (drive_state == D_REVERSE && drive_remaining < 0) {
+      drive_state = D_TURN;
+      drive_remaining = myTurnTime[turnVar];
+    } else if (drive_state == D_TURN && drive_remaining < 0) {
+      drive_state = D_FORWARD;
+      drive_remaining = 1;
+    } else if (drive_state == D_FORWARD) {
+      drive_remaining = 1;
+    }
+    if (drive_state == D_FORWARD) {
+      if (300 < sense.imu.o.x && sense.imu.o.x < 350) {
+        drive_power[0] = 40;//255;
+        drive_power[1] = 0;
+      }
+      else if (sense.line.left.light >300){
+        drive_power[0] =48;
+        drive_power[1] = 48;
+        Serial.println("turn left");
+      }
+      else if (sense.line.right.light > 300 ){
+        drive_power[0] = 48  ;
+        drive_power[1] = -48;
+        Serial.println("turn right");
+      }
+      
+      else {
+        drive_power[0] = 48;
+        drive_power[1] = 0;
+      }
+      
+    } else if (drive_state == D_REVERSE) {
+      drive_power[0] = -60; drive_power[1] = 0;
+    } else if (drive_state = D_TURN) {
+      drive_power[0] = 0; drive_power[1] = drive_turn * 180;
+    } else {
+      drive_power[0] = 0; drive_power[1] = 0;
     }
 
     if (inclineDetected(sense) && tic_tac_state == 0) {
@@ -185,4 +287,14 @@ void loop() {
       tictac_drop(act.tictac);
     }
   }
+
+
+  displayState(leds, state);
+  if (drive_remaining >= 0) {
+    drive(drive_power[0], drive_power[1]);
+    drive_remaining -= gtime.dt;
+  } else {
+    drive(0, 0);
+  }
+  tictac_loop(act.tictac);
 }
