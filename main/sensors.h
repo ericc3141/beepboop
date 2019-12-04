@@ -72,6 +72,12 @@ float ir_read(ir_t &ir) {
 typedef struct {
   float x,y,z;
 } vec3f_t;
+vec3f_t vadd(vec3f_t a, vec3f_t b) {
+  return {a.x+b.x, a.y+b.y, a.z+b.z};
+}
+vec3f_t vmul(vec3f_t v, float c) {
+  return {v.x*c, v.y*c, v.z*c};
+}
 typedef struct {
   int addr;
   vec3f_t a, g, o;
@@ -86,7 +92,7 @@ imu_t imu_setup(int addr) {
   return imu;
 }
 
-void imu_read(imu_t &imu) {
+void imu_read(imu_t &imu, float dt) {
   Wire.beginTransmission(imu.addr);
   Wire.write(0x3B);  // starting with register 0x3B (ACCEL_XOUT_H)
   Wire.endTransmission(false);
@@ -114,9 +120,15 @@ void imu_read(imu_t &imu) {
   imu.g.y = (float)raw.val.gy / glsb;
   imu.g.z = (float)raw.val.gz / glsb;
 
-  imu.o.x = RAD_TO_DEG * (atan2(-imu.a.y, -imu.a.z)+PI);
-  imu.o.y = RAD_TO_DEG * (atan2(-imu.a.x, -imu.a.z)+PI);
-  imu.o.z = RAD_TO_DEG * (atan2(-imu.a.y, -imu.a.x)+PI);
+  // complementary filter
+  vec3f_t ao = {};
+  ao.x = RAD_TO_DEG * (atan2(-imu.a.y, imu.a.z));
+  ao.y = RAD_TO_DEG * (atan2(-imu.a.x, imu.a.z));
+  ao.z = RAD_TO_DEG * (atan2(-imu.a.y, -imu.a.x)+PI);
+   Serial.print("\t");
+   Serial.print(ao.x);
+  vec3f_t go = vadd(imu.o, vmul(imu.g, dt));
+  imu.o = vadd(vmul(ao, 0.02), vmul(go, 0.98));
 }
 
 #endif // SENSORS_H

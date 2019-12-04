@@ -216,7 +216,7 @@ void loop() {
   gtime.now = millis();
   gtime.dt = gtime.now - gtime.prev;
   
-  // Serial.print("\n");
+   Serial.print("\n");
   //nh.spinOnce();
 
   /* Read all sensors */
@@ -244,21 +244,26 @@ void loop() {
   ultra_read(sense.obstacle.right);
 //  ir_read(sense.obstacle.mid);
   joystick_read(sense.joystick);
-  imu_read(sense.imu);
+  imu_read(sense.imu, (float)gtime.dt/1000.);
   if (digitalRead(buttons.estop) == LOW) {
     state = S_ESTOP;
   }
 
-//   Serial.print("\t");
-//   Serial.print(sense.imu.o.x);
-//   Serial.print("\n");
+   Serial.print("\t");
+   Serial.print(sense.imu.a.y);
+   Serial.print("\t");
+   Serial.print(sense.imu.a.z);
+   Serial.print("\t");
+   Serial.print(sense.imu.g.x);
+   Serial.print("\t");
+   Serial.print(sense.imu.o.x);
 //   Serial.print(sense.obstacle.left.dist);
 //   Serial.print("\t");
 //   Serial.print(sense.obstacle.right.dist);
-  Serial.print(sense.ultra.left.dist);
-  Serial.print("\t");
-  Serial.print(sense.ultra.right.dist);
-  Serial.print("\n");
+//  Serial.print("\t");
+//  Serial.print(sense.ultra.left.dist);
+//  Serial.print("\t");
+//  Serial.print(sense.ultra.right.dist);
 //  switch(drive_state) {
 //    case D_FORWARD: // Serial.print("forward"); break;
 //    case D_REVERSE: // Serial.print("reverse"); break;
@@ -334,8 +339,8 @@ void loop() {
       if (drive_state == D_FORWARD) {
         didTurn = false;
         // IMU logic
-        if (300 < sense.imu.o.x && sense.imu.o.x < 350) {
-          drive_power[0] = DRIVE_POWER;
+        if (10 < sense.imu.o.x) {
+          drive_power[0] = MAX_POWER;
           drive_power[1] = 0;
         } else if (sense.line.left.light > IR_THRESHOLD || sense.spot.left.light > IR_THRESHOLD && !edgeDetected(sense)) { // Line following
           drive_power[0] = TURN_SPEED;
