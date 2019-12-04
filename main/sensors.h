@@ -129,6 +129,7 @@ void imu_read(imu_t &imu, float dt) {
    Serial.print(ao.x);
   vec3f_t go = vadd(imu.o, vmul(imu.g, dt));
   imu.o = vadd(vmul(ao, 0.02), vmul(go, 0.98));
+  imu.o = ao;
 }
 
 #endif // SENSORS_H

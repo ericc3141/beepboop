@@ -9,9 +9,12 @@
 #define OBSTACLE_THRESHOLD 10
 #define IR_THRESHOLD 300
 #define TURN_SPEED 130
-#define DRIVE_POWER 50
+#define DRIVE_POWER 55
 #define MAX_POWER 255
-#define REVERSE_POWER 40
+#define REVERSE_POWER 65
+#define SURGE_POWER 255
+
+const float incline_threshold = 5;
 
 /* State variables */
 
@@ -79,6 +82,7 @@ bool lineFollowed = false;
 int tic_tac_state = 0;
 int spot_state = 0;
 bool didTurn = false;
+int incline_start = -1;
 
 // Initialize drive variables
 int drive_power[2] = {0, 0}; // {absolute power, power diff between motors}
@@ -144,7 +148,9 @@ void setup() {
   act.motor.right = motor_setup(8, 3, 4);
   act.motor.left = motor_setup(7, 6, 5);
   
-  act.tictac = tictac_setup(2);
+  //act.tictac = tictac_setup(2);
+  tictac_t tictac = {2};
+  tictac.servo.attach(2);
 }
 
 int clamp(int lo, int hi, int val) {
@@ -249,21 +255,26 @@ void loop() {
     state = S_ESTOP;
   }
 
+//   Serial.print("\t");
+//   Serial.print(sense.imu.a.y);
+//   Serial.print("\t");
+//   Serial.print(sense.imu.a.z);
+//   Serial.print("\t");
+//   Serial.print(sense.imu.g.x);
    Serial.print("\t");
-   Serial.print(sense.imu.a.y);
-   Serial.print("\t");
-   Serial.print(sense.imu.a.z);
-   Serial.print("\t");
-   Serial.print(sense.imu.g.x);
-   Serial.print("\t");
+   Serial.print("IMU: ");
    Serial.print(sense.imu.o.x);
+//  Serial.print("LEFT OBSTACLE: ");
 //   Serial.print(sense.obstacle.left.dist);
 //   Serial.print("\t");
+//   Serial.print("RIGHT OBSTACLE: ");
 //   Serial.print(sense.obstacle.right.dist);
-//  Serial.print("\t");
-//  Serial.print(sense.ultra.left.dist);
-//  Serial.print("\t");
-//  Serial.print(sense.ultra.right.dist);
+  Serial.print("\t");
+  Serial.print("LEFT ULTRA: ");
+  Serial.print(sense.ultra.left.dist);
+  Serial.print("\t");
+  Serial.print("RIGHT ULTRA: ");
+  Serial.print(sense.ultra.right.dist);
 //  switch(drive_state) {
 //    case D_FORWARD: // Serial.print("forward"); break;
 //    case D_REVERSE: // Serial.print("reverse"); break;
@@ -339,9 +350,24 @@ void loop() {
       if (drive_state == D_FORWARD) {
         didTurn = false;
         // IMU logic
-        if (10 < sense.imu.o.x) {
-          drive_power[0] = DRIVE_POWER;
-          drive_power[1] = 0;
+        if (sense.ultra.left.dist + sense.ultra.right.dist < 11 && 5 < sense.imu.o.x) {
+          int incline_countdown = 150;
+
+          while (incline_countdown > 0) {
+            if (sense.imu.o.x < 3) {
+              drive(0, 0);
+              //tictac_drop(act.tictac);
+//              while(!act.tictac.done){
+//                tictac_loop(act.tictac);
+//              }
+              break;
+            }
+            drive_power[0] = SURGE_POWER;
+            drive_power[1] = 0;
+            incline_countdown -= 1;
+            delay(10);
+          }
+          
         } else if (sense.line.left.light > IR_THRESHOLD || sense.spot.left.light > IR_THRESHOLD && !edgeDetected(sense)) { // Line following
           drive_power[0] = TURN_SPEED/2;
           drive_power[1] = TURN_SPEED;
@@ -367,14 +393,14 @@ void loop() {
       }
 
       /* Tic tac logic */
-      if (inclineDetected(sense) && tic_tac_state == 0) {
-        tic_tac_state = 1;
-      }
-      
-      if (!inclineDetected(sense) && tic_tac_state == 1) {
-        tic_tac_state = 2;
-        tictac_drop(act.tictac);
-      }
+//      if (inclineDetected(sense) && tic_tac_state == 0) {
+//        tic_tac_state = 1;
+//      }
+//      
+//      if (!inclineDetected(sense) && tic_tac_state == 1) {
+//        tic_tac_state = 2;
+//        tictac_drop(act.tictac);
+//      }
   }
 
 
@@ -393,5 +419,5 @@ void loop() {
     drive(0, 0);
   }
   
-  tictac_loop(act.tictac);
+  //tictac_loop(act.tictac);
 }
