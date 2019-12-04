@@ -8,9 +8,10 @@
 #define EDGE_THRESHOLD 15
 #define OBSTACLE_THRESHOLD 10
 #define IR_THRESHOLD 300
-#define TURN_SPEED 100
-#define DRIVE_POWER 50
+#define TURN_SPEED 50
+#define DRIVE_POWER 40
 #define MAX_POWER 255
+#define REVERSE_POWER 40
 
 /* State variables */
 
@@ -250,10 +251,14 @@ void loop() {
 
 //   Serial.print("\t");
 //   Serial.print(sense.imu.o.x);
-   Serial.print("\n");
-   Serial.print(sense.obstacle.left.dist);
-   Serial.print("\t");
-   Serial.print(sense.obstacle.right.dist);
+//   Serial.print("\n");
+//   Serial.print(sense.obstacle.left.dist);
+//   Serial.print("\t");
+//   Serial.print(sense.obstacle.right.dist);
+  Serial.print(sense.ultra.left.dist);
+  Serial.print("\t");
+  Serial.print(sense.ultra.right.dist);
+  Serial.print("\n");
 //  switch(drive_state) {
 //    case D_FORWARD: // Serial.print("forward"); break;
 //    case D_REVERSE: // Serial.print("reverse"); break;
@@ -271,6 +276,7 @@ void loop() {
       drive_state = D_FORWARD;
       drive_power[0] = 100;
       drive_power[1] = 0;
+      drive_remaining = 50;
     }
   } else if (state == S_RUN) {
       // begin non-reversing block
@@ -329,14 +335,14 @@ void loop() {
         didTurn = false;
         // IMU logic
         if (300 < sense.imu.o.x && sense.imu.o.x < 350) {
-          drive_power[0] = MAX_POWER;
+          drive_power[0] = DRIVE_POWER;
           drive_power[1] = 0;
-        } else if (sense.line.left.light > IR_THRESHOLD || sense.spot.left.light > IR_THRESHOLD) { // Line following
+        } else if (sense.line.left.light > IR_THRESHOLD || sense.spot.left.light > IR_THRESHOLD && !edgeDetected(sense)) { // Line following
           drive_power[0] = TURN_SPEED;
           drive_power[1] = TURN_SPEED;
           didTurn = true;
           // Serial.println("turn left");
-        } else if (sense.line.right.light > IR_THRESHOLD || sense.spot.right.light > IR_THRESHOLD) {
+        } else if (sense.line.right.light > IR_THRESHOLD || sense.spot.right.light > IR_THRESHOLD && !edgeDetected(sense)) {
           drive_power[0] = TURN_SPEED;
           drive_power[1] = -1 * TURN_SPEED;
           didTurn = true;
@@ -346,7 +352,7 @@ void loop() {
           drive_power[1] = 0;
         }      
       } else if (drive_state == D_REVERSE) {
-        drive_power[0] = -60; 
+        drive_power[0] = -1 * REVERSE_POWER; 
         drive_power[1] = 0;
       } else if (drive_state = D_TURN) {
         drive_power[0] = 0; 
