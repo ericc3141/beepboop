@@ -1,8 +1,16 @@
-#include <ros.h>
-#include <std_msgs/Empty.h>
+//#include <ros.h>
+//#include <std_msgs/Empty.h>
 
 #include "sensors.h"
 #include "actuators.h"
+
+/* Macros */
+#define EDGE_THRESHOLD 15
+#define OBSTACLE_THRESHOLD 10
+#define IR_THRESHOLD 300
+#define TURN_SPEED 100
+#define DRIVE_POWER 50
+#define MAX_POWER 255
 
 /* State variables */
 
@@ -69,6 +77,7 @@ drive_t drive_state;
 bool lineFollowed = false;
 int tic_tac_state = 0;
 int spot_state = 0;
+bool didTurn = false;
 
 // Initialize drive variables
 int drive_power[2] = {0, 0}; // {absolute power, power diff between motors}
@@ -85,11 +94,11 @@ typedef struct {
 clock_t gtime = {0, 0, 1};
 
 /* E-Stop Code */
-ros::NodeHandle nh;
-void messageCb( const std_msgs::Empty& toggle_msg){
-  state = S_ESTOP;
-} 
-ros::Subscriber<std_msgs::Empty> sub("toggle_led", &messageCb);
+//ros::NodeHandle nh;
+//void messageCb( const std_msgs::Empty& toggle_msg){
+//  state = S_ESTOP;
+//} 
+//ros::Subscriber<std_msgs::Empty> sub("toggle_led", &messageCb);
 
 void setup() {
   Wire.begin();
@@ -120,9 +129,9 @@ void setup() {
   sense.line.left = ir_setup(A3);
   sense.line.right = ir_setup(A4);
 
-  sense.spot.left = ir_setup(A5); // TODO: insert actual pins
-  sense.spot.right = ir_setup(A6); // TODO: insert actual pins
-  sense.spot.mid = ir_setup(A7); // TODO: insert actual pins
+  sense.spot.left = ir_setup(A6);
+  sense.spot.right = ir_setup(A5);
+//  sense.spot.mid = ir_setup(A7); // TODO: insert actual pins
   
   sense.obstacle.left = ultra_setup(42, 46);
   sense.obstacle.right = ultra_setup(40, 44);
@@ -144,10 +153,10 @@ int clamp(int lo, int hi, int val) {
 void drive(int power, int turn) {
   int left = clamp(-255, 255, power - turn);
   int right = clamp(-255, 255, power + turn);
-  Serial.print("\tdrive\t");
-  Serial.print(left);
-  Serial.print("\t");
-  Serial.print(right);
+  // Serial.print("\tdrive\t");
+  // Serial.print(left);
+  // Serial.print("\t");
+  // Serial.print(right);
   motor_drive(act.motor.left, left);
   motor_drive(act.motor.right, right);
 }
@@ -175,18 +184,20 @@ void displayState(leds_t leds, state_t state) {
 }
 
 bool edgeDetected(sensors_t sense) {
-  return sense.ultra.left.dist > 15 || sense.ultra.right.dist > 15;
+  return sense.ultra.left.dist > EDGE_THRESHOLD || sense.ultra.right.dist > EDGE_THRESHOLD;
 }
 
 bool obstacleDetected(sensors_t sense){
-  const float dist_thresh = 10;
-  return sense.obstacle.left.dist < dist_thresh || sense.obstacle.right.dist < dist_thresh;
+//  const float dist_thresh = 10;
+  return (sense.obstacle.left.dist < OBSTACLE_THRESHOLD && sense.obstacle.left.dist > 1) 
+          || (sense.obstacle.right.dist < OBSTACLE_THRESHOLD && sense.obstacle.right.dist > 1) ;
 }
 
 bool spotDetected(sensors_t sense){
-  return sense.spot.left.light > 300 
-    && sense.spot.right.light > 300
-    && sense.spot.mid.light > 300;
+  return sense.spot.left.light > IR_THRESHOLD
+    && sense.spot.right.light > IR_THRESHOLD
+    && sense.line.left.light > IR_THRESHOLD
+    && sense.line.right.light > IR_THRESHOLD;
 }
 
 bool inclineDetected(sensors_t sense){
@@ -195,8 +206,8 @@ bool inclineDetected(sensors_t sense){
 }
 
 void loop() {
-  Serial.print("TurnVar");
-  Serial.print(turnVar);
+  // Serial.print("TurnVar");
+  // Serial.print(turnVar);
   
   delay(10);
   
@@ -204,7 +215,7 @@ void loop() {
   gtime.now = millis();
   gtime.dt = gtime.now - gtime.prev;
   
-  Serial.print("\n");
+  // Serial.print("\n");
   //nh.spinOnce();
 
   /* Read all sensors */
@@ -212,10 +223,21 @@ void loop() {
   ultra_read(sense.ultra.right);
   ir_read(sense.line.left);
   ir_read(sense.line.right);
-  Serial.print("IR RIGHT: ");
-  Serial.print("IR LEFT: ");
-  Serial.print(sense.line.left.light);
-  Serial.print(sense.line.right.light);
+  ir_read(sense.spot.left);
+  ir_read(sense.spot.right);
+//  Serial.print(" IR LEFT: ");
+//  Serial.print(sense.line.left.light);
+//  
+//  Serial.print(" IR RIGHT: ");
+//  Serial.print(sense.line.right.light);
+//
+//  Serial.print(" SPOT LEFT: ");
+//  Serial.print(sense.spot.left.light);
+//  Serial.print("\n");
+//  Serial.print(" SPOT RIGHT: ");
+//  Serial.print(sense.spot.right.light);
+
+  
   
   ultra_read(sense.obstacle.left);
   ultra_read(sense.obstacle.right);
@@ -226,19 +248,18 @@ void loop() {
     state = S_ESTOP;
   }
 
-  Serial.print("\t");
-  Serial.print(sense.imu.o.x);
-  Serial.print("\t");
-  Serial.print(sense.obstacle.left.dist);
-  Serial.print("\t");
-  Serial.print(sense.obstacle.right.dist);
-  Serial.print("\t");
-  switch(drive_state) {
-    case D_FORWARD: Serial.print("forward"); break;
-    case D_REVERSE: Serial.print("reverse"); break;
-    case D_TURN: Serial.print("turn"); break;
-    default: Serial.print("broken");
-  }
+//   Serial.print("\t");
+//   Serial.print(sense.imu.o.x);
+   Serial.print("\n");
+   Serial.print(sense.obstacle.left.dist);
+   Serial.print("\t");
+   Serial.print(sense.obstacle.right.dist);
+//  switch(drive_state) {
+//    case D_FORWARD: // Serial.print("forward"); break;
+//    case D_REVERSE: // Serial.print("reverse"); break;
+//    case D_TURN: // Serial.print("turn"); break;
+//    default: // Serial.print("broken");
+//  }
 
   if (state == S_ESTOP) {
     drive_remaining = -1;
@@ -275,9 +296,21 @@ void loop() {
           drive_turn = myTurnDir[turnVar];
           drive(0,0);
           delay(100);
-        } else if (spotDetected(sense) && lineFollowed) {
-          state = S_FINISH;
-          drive_remaining = -1;
+        } else if (spotDetected(sense)) {
+          int countdown = 50;
+          while (spotDetected(sense) && countdown > 0) {
+            if (sense.ultra.right.dist > 15 || sense.ultra.left.dist > 15) {
+              break;
+            }
+            drive(60, 0);
+            countdown -= 1;
+            delay(10);
+          }
+
+          if (countdown == 0) {
+            state = S_FINISH;
+            drive_remaining = -1;
+          }
         }
       }
       // end non-reversing block
@@ -293,20 +326,23 @@ void loop() {
       }
       
       if (drive_state == D_FORWARD) {
+        didTurn = false;
         // IMU logic
         if (300 < sense.imu.o.x && sense.imu.o.x < 350) {
-          drive_power[0] = 40;//255;
+          drive_power[0] = MAX_POWER;
           drive_power[1] = 0;
-        } else if (sense.line.left.light > 300) { // Line following
-          drive_power[0] = 48;
-          drive_power[1] = 48;
-          Serial.println("turn left");
-        } else if (sense.line.right.light > 300 ) {
-          drive_power[0] = 48  ;
-          drive_power[1] = -48;
-          Serial.println("turn right");
-        } else {
-          drive_power[0] = 48;
+        } else if (sense.line.left.light > IR_THRESHOLD || sense.spot.left.light > IR_THRESHOLD) { // Line following
+          drive_power[0] = TURN_SPEED;
+          drive_power[1] = TURN_SPEED;
+          didTurn = true;
+          // Serial.println("turn left");
+        } else if (sense.line.right.light > IR_THRESHOLD || sense.spot.right.light > IR_THRESHOLD) {
+          drive_power[0] = TURN_SPEED;
+          drive_power[1] = -1 * TURN_SPEED;
+          didTurn = true;
+          // Serial.println("turn right");
+        } else { // drive normally
+          drive_power[0] = DRIVE_POWER;
           drive_power[1] = 0;
         }      
       } else if (drive_state == D_REVERSE) {
@@ -335,6 +371,12 @@ void loop() {
   
   if (drive_remaining >= 0) {
     drive(drive_power[0], drive_power[1]);
+
+    if (didTurn) {
+      delay(100);
+      drive(0, 0);
+    }
+    
     drive_remaining -= gtime.dt;
   } else {
     drive(0, 0);

@@ -7,8 +7,7 @@ typedef enum {LF_L_I = A0,
  OB_L_I = 0,
  OB_R_I = 1,
  OB_M_I = 2,
- }pin_ir_t;
-
+} pin_ir_t;
 
 typedef struct {
   int p_echo, p_trig;
@@ -21,6 +20,7 @@ ultra_t ultra_setup(int p_echo, int p_trig) {
   pinMode(ultra.p_trig, OUTPUT);
   return ultra;
 }
+
 float ultra_read(ultra_t &ultra) {
   digitalWrite(ultra.p_trig, LOW);
   delayMicroseconds(2);
@@ -38,10 +38,12 @@ typedef struct {
   float zero, scale;
   float x, y, button;
 } joystick_t;
+
 joystick_t joystick_setup(int p_x, int p_y, int p_button, float zero, float scale) {
   joystick_t joystick = {p_x, p_y, p_button, zero, scale};
   return joystick;
 }
+
 void joystick_read(joystick_t &joystick) {
   joystick.x = ((float)analogRead(joystick.p_x) - joystick.zero) / joystick.scale;
   joystick.y = ((float)analogRead(joystick.p_y) - joystick.zero) / joystick.scale;
@@ -52,11 +54,13 @@ typedef struct {
   int p_in;
   float light;
 } ir_t;
+
 ir_t ir_setup(int p_in) {
   ir_t ir = {p_in};
   pinMode(p_in, INPUT);
   return ir;
 }
+
 float ir_read(ir_t &ir) {
   ir.light = analogRead(ir.p_in);
   return ir.light;
@@ -69,6 +73,7 @@ typedef struct {
   int addr;
   vec3f_t a, g, o;
 } imu_t;
+
 imu_t imu_setup(int addr) {
   imu_t imu = {addr};
   Wire.beginTransmission(addr);
@@ -77,6 +82,7 @@ imu_t imu_setup(int addr) {
   Wire.endTransmission(true);
   return imu;
 }
+
 void imu_read(imu_t &imu) {
   Wire.beginTransmission(imu.addr);
   Wire.write(0x3B);  // starting with register 0x3B (ACCEL_XOUT_H)

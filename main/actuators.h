@@ -3,6 +3,7 @@
 typedef struct {
   int p_enable, p_pos, p_neg;
 } motor_t;
+
 motor_t motor_setup(int p_enable, int p_pos, int p_neg) {
   motor_t motor = {p_enable, p_pos, p_neg};
   pinMode(p_enable, OUTPUT);
@@ -10,6 +11,7 @@ motor_t motor_setup(int p_enable, int p_pos, int p_neg) {
   pinMode(p_neg, OUTPUT);
   return motor;
 }
+
 void motor_drive(motor_t &motor, int power) {
   if (power > 0) {
     digitalWrite(motor.p_pos, HIGH);
@@ -33,12 +35,14 @@ typedef struct {
   bool dropped;
   bool done;
 } tictac_t;
+
 tictac_t tictac_setup(int p_servo) {
   tictac_t tictac = {p_servo};
   tictac.servo.attach(p_servo);
   tictac.servo.write(90);
   return tictac;
 }
+
 void tictac_drop(tictac_t &tictac) {
   if (tictac.dropped) {
     return;
@@ -47,6 +51,7 @@ void tictac_drop(tictac_t &tictac) {
   tictac.servo.write(72);
   tictac.dropped = true;
 }
+
 void tictac_loop(tictac_t &tictac) {
   if (tictac.dropped && millis() - tictac.start > 3000) {
     tictac.servo.write(87);
