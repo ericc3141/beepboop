@@ -8,8 +8,8 @@
 #define EDGE_THRESHOLD 15
 #define OBSTACLE_THRESHOLD 10
 #define IR_THRESHOLD 300
-#define TURN_SPEED 50
-#define DRIVE_POWER 40
+#define TURN_SPEED 130
+#define DRIVE_POWER 50
 #define MAX_POWER 255
 #define REVERSE_POWER 40
 
@@ -340,15 +340,15 @@ void loop() {
         didTurn = false;
         // IMU logic
         if (10 < sense.imu.o.x) {
-          drive_power[0] = MAX_POWER;
+          drive_power[0] = DRIVE_POWER;
           drive_power[1] = 0;
         } else if (sense.line.left.light > IR_THRESHOLD || sense.spot.left.light > IR_THRESHOLD && !edgeDetected(sense)) { // Line following
-          drive_power[0] = TURN_SPEED;
+          drive_power[0] = TURN_SPEED/2;
           drive_power[1] = TURN_SPEED;
           didTurn = true;
           // Serial.println("turn left");
         } else if (sense.line.right.light > IR_THRESHOLD || sense.spot.right.light > IR_THRESHOLD && !edgeDetected(sense)) {
-          drive_power[0] = TURN_SPEED;
+          drive_power[0] = TURN_SPEED/2;
           drive_power[1] = -1 * TURN_SPEED;
           didTurn = true;
           // Serial.println("turn right");
