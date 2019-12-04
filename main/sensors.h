@@ -1,3 +1,6 @@
+#ifndef SENSORS_H
+#define SENSORS_H
+
 #include<Wire.h>
 
 const long PULSE_TIMEOUT = 100000;
@@ -115,3 +118,5 @@ void imu_read(imu_t &imu) {
   imu.o.y = RAD_TO_DEG * (atan2(-imu.a.x, -imu.a.z)+PI);
   imu.o.z = RAD_TO_DEG * (atan2(-imu.a.y, -imu.a.x)+PI);
 }
+
+#endif // SENSORS_H

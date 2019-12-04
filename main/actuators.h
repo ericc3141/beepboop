@@ -1,3 +1,6 @@
+#ifndef ACTUATORS_H
+#define ACTUATORS_H
+
 #include <Servo.h>
 
 typedef struct {
@@ -58,3 +61,5 @@ void tictac_loop(tictac_t &tictac) {
     tictac.done = true;
   }
 }
+
+#endif // ACTUATORS_H
